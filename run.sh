@@ -1,0 +1,5 @@
+python3 ppo_continuous_action.py --exp_name ppo_0_5_act_penalty --env_id Nav2D-v0 --seed 1 --total_timesteps 300_000 --wandb_entity elefort-org --wandb_project_name 2d_navigator --capture_video --track --num_envs 3 > /dev/null
+python3 ppo_continuous_action.py --exp_name ppo_0_5_act_penalty --env_id Nav2D-v0 --seed 2 --total_timesteps 300_000 --wandb_entity elefort-org --wandb_project_name 2d_navigator --capture_video --track --num_envs 3 > /dev/null
+python3 ppo_continuous_action.py --exp_name ppo_0_5_act_penalty --env_id Nav2D-v0 --seed 3 --total_timesteps 300_000 --wandb_entity elefort-org --wandb_project_name 2d_navigator --capture_video --track --num_envs 3 > /dev/null
+python3 ppo_continuous_action.py --exp_name ppo_0_5_act_penalty --env_id Nav2D-v0 --seed 4 --total_timesteps 300_000 --wandb_entity elefort-org --wandb_project_name 2d_navigator --capture_video --track --num_envs 3 > /dev/null
+python3 ppo_continuous_action.py --exp_name ppo_0_5_act_penalty --env_id Nav2D-v0 --seed 5 --total_timesteps 300_000 --wandb_entity elefort-org --wandb_project_name 2d_navigator --capture_video --track --num_envs 3 > /dev/null
