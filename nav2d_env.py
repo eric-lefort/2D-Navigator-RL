@@ -16,8 +16,13 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         goal_y: float
 
     Observations:
-        Type: Box(-inf, inf, 6,)
-    
+        Type:
+            Box(4,)
+
+        goal - x: float
+        goal - y: float
+        vx: float
+        vy: float
     Actions:
         Type: Box(-1, 1, 2^n,)
     """
@@ -39,10 +44,10 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         assert render_mode in self.metadata["render_modes"], f"Invalid render mode {render_mode}"
         self.render_mode = render_mode
         self.dense_reward = True
-        self.n_max_steps = 700
+        self.n_max_steps = 250
         self.visualize_actions = True
 
-        self.screen_size = (400, 400)
+        self.screen_size = (300, 300)
         self.screen_center = (self.screen_size[0] // 2, self.screen_size[1] // 2)
 
         self.screen = None
@@ -63,31 +68,34 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.circle_color = (0, 0, 0) # (50, 225, 30)  # Green
         self.goal_color = (0, 0, 0) # (255, 0, 0)  # Red
 
-        self.x_range = (-20, 20)
-        self.y_range = (-20, 20)
-        self.vx_range = (-1, 1)
-        self.vy_range = (-1, 1)
+        self.x_range = (-10, 10)
+        self.y_range = (-10, 10)
+        self.vx_range = (-10, 10)
+        self.vy_range = (-10, 10)
 
-        self.target_size = 1
+        self.min_distance = np.linalg.norm(np.array([self.x_range[1] - self.x_range[0], self.y_range[1] - self.y_range[0]])) / 12
+
+        self.target_size = 0.5
         self.noise_std = 0.0
 
         self.action_space = gym.spaces.Box(-1, 1, (2 ** n,))
         self.action_angles = np.linspace(0, np.pi, 2 ** n, endpoint=False)
-        self.action_components = np.array([np.cos(self.action_angles), np.sin(self.action_angles)]).T
+        self.action_normalization = np.sum(np.sin(self.action_angles))
+        self.action_components = np.array([np.cos(self.action_angles), np.sin(self.action_angles)]).T / self.action_normalization
         observation_range = np.array([
             self.x_range, # x
             self.y_range, # y
             self.vx_range, # vx
             self.vy_range, # vy
-            self.x_range, # x goal
-            self.y_range # y goal
+            # self.x_range, # x goal
+            # self.y_range # y goal
         ])
-        self.observation_space = gym.spaces.Box(observation_range[:, 0], observation_range[:, 1], (6,))
+        self.observation_space = gym.spaces.Box(observation_range[:, 0], observation_range[:, 1], (4,))
 
 
     def step(self, action):
         assert self.action_space.contains(action), f"Action {action} is invalid."
-        mass = 1
+        mass = 2
 
         self.action = action
         acc = np.dot(action, self.action_components) / mass
@@ -100,7 +108,6 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         vy += acc_y * dt
         vx = np.clip(vx, *self.vx_range)
         vy = np.clip(vy, *self.vy_range)
-
         x += vx * dt
         y += vy * dt
 
@@ -116,34 +123,35 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         reward = 0
 
-        # action penalty
-        reward -= np.linalg.norm(action)**2 * 0.1
-
         if offscreen:
-            reward = -1
+            reward = -10
             terminated = True
 
         distance = np.linalg.norm([x - goal_x, y - goal_y])
         if self.dense_reward:
-            reward += np.exp(-(distance/10)**2)
+            reward += np.exp(-(distance/3)**2) * 10 / 200
+            reward -= np.mean((action)**2 / self.action_normalization) * 0.02
+            reward -= 0.005
             if distance < self.target_size:
                 terminated = True
-                reward = self.n_max_steps - self.n_steps + 50
+                reward += 10
         else:
-            reward = -0.01
             if distance < self.target_size:
                 terminated = True 
                 reward += 1
 
         self.state[:4] = np.array([x, y, vx, vy])
         self.n_steps += 1
-        print(self.n_steps)
         if self.n_steps >= self.n_max_steps:
             truncated = True
 
         # observation, reward, terminated, truncated, info
-        return np.array(self.state, dtype=np.float32), reward, terminated, truncated, {}
+        observation = self._get_observation()
+        return observation, reward, terminated, truncated, {}
         
+    def _get_observation(self):
+        x, y, vx, vy, goal_x, goal_y = self.state
+        return np.array([(goal_x - x) / 2, (goal_y - y) / 2, vx, vy], dtype=np.float32)
 
     def reset(
         self,
@@ -151,18 +159,20 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
-        shrink_factor = 0.9
-        x = shrink_factor * np.random.uniform(*self.x_range)
-        y = shrink_factor * np.random.uniform(*self.y_range)
-        vx = np.random.uniform(*self.vx_range)
-        vy = np.random.uniform(*self.vy_range)
-        goal_x = shrink_factor * np.random.uniform(*self.x_range)
-        goal_y = shrink_factor * np.random.uniform(*self.y_range)
+        x, y, goal_x, goal_y = 0, 0, 0, 0
+        while np.linalg.norm([x - goal_x, y - goal_y]) < self.min_distance:
+            x = 0.8 * np.random.uniform(*self.x_range)
+            y = 0.8 * np.random.uniform(*self.y_range)
+            vx = 0.05 * np.random.uniform(*self.x_range)
+            vy = 0.05 * np.random.uniform(*self.y_range)
+            goal_x = 0.7 * np.random.uniform(*self.x_range)
+            goal_y = 0.7 * np.random.uniform(*self.y_range)
 
         self.state = np.array([x, y, vx, vy, goal_x, goal_y], dtype=np.float32)
+        observation = self._get_observation()
         self.n_steps = 0
         info = {}
-        return self.state, info
+        return observation, info
 
     def render(self):
         if not self.isopen:
@@ -185,7 +195,7 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 pos = self.state[:2]
                 color = (255, 255 * (1 - magnitude[i]), 255 * (1 - magnitude[i]))
 
-                self.draw_force(pos, angle, color, r=3, scale=1.0)
+                self.draw_force(pos, angle, color, r=1.5, scale=0.5)
 
         goal = self.coordinate_to_pixel(self.state[4:])
         x_length = self.screen_size[0] // 60
@@ -231,5 +241,5 @@ class Nav2DEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 register(
     id='Nav2D-v0',
     entry_point='nav2d_env:Nav2DEnv',
-    max_episode_steps=700
+    max_episode_steps=250
 )

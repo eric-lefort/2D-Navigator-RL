@@ -4,7 +4,7 @@ Welcome to the Gymnasium Environment! This repository contains a custom environm
 
 ![Example Random Action](assets/example_rand_act.gif)
 
-![Example P Control](assets/example_p_ctrl.gif)
+<!-- ![Example P Control](assets/example_p_ctrl.gif) -->
 
 ## Table of Contents
 
